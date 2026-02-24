@@ -2,63 +2,65 @@ import pandas as pd
 
 CATALOG_PATH = "data/catalog.csv"
 
+
 def load_and_clean_catalog(path):
     print("Loading catalog...")
     df = pd.read_csv(path)
-
     print("Original shape:", df.shape)
-    print("Columns:", df.columns.tolist())
 
-    if "image" not in df.columns:
-        raise ValueError("CSV does not contain 'image' column with local image paths.")
+    # ── Rename columns to standard names ──────────────────────────────
+    df = df.rename(columns={
+        "Body (HTML)": "description",
+        "Variant Price": "price",
+        "Image Src": "image_src",    # raw Shopify image URL (not used for local path)
+    })
 
-    # Normalize column names first
-    if "Body (HTML)" in df.columns:
-        df = df.rename(columns={"Body (HTML)": "description"})
-    if "Variant Price" in df.columns:
-        df = df.rename(columns={"Variant Price": "price"})
+    # ── Fix prices — forward fill so variants inherit from first row ───
+    df["price"] = pd.to_numeric(df["price"], errors="coerce")
+    df["price"] = df["price"].replace(0, pd.NA).ffill()
 
-    # Keep useful columns
-    keep_cols = []
-    for col in ["Handle", "Title", "description", "image", "price"]:
-        if col in df.columns:
-            keep_cols.append(col)
-    df = df[keep_cols].copy()
+    # ── Forward fill Title and description within Handle groups ────────
+    # (only the first row of each Handle has Title/description filled)
+    df["Title"] = df["Title"].ffill()
+    df["description"] = df["description"].ffill()
 
-    # Fix prices — forward fill so variants inherit price from first row
-    if "price" in df.columns:
-        df["price"] = pd.to_numeric(df["price"], errors="coerce")
-        df["price"] = df["price"].replace(0, pd.NA)
-        df["price"] = df["price"].ffill()
+    # ── RULE: Use Image Position = 1 as main image ─────────────────────
+    # Filter to rows where Image Position == 1 first
+    if "Image Position" in df.columns:
+        df["Image Position"] = pd.to_numeric(df["Image Position"], errors="coerce")
+        df_main = df[df["Image Position"] == 1].copy()
 
-    # ── KEY FIX: deduplicate by Handle, keep first row per product ──
-    # This ensures Title, description, and image are all populated
-    if "Handle" in df.columns:
-        # Forward fill Title and description within each Handle group
-        df["Title"] = df["Title"].ffill()
-        df["description"] = df["description"].ffill()
+        # Fallback: some Handles may have no Image Position = 1 row
+        handles_with_main = set(df_main["Handle"].dropna())
+        df_fallback = df[~df["Handle"].isin(handles_with_main)].copy()
+        df_fallback = df_fallback.drop_duplicates(subset=["Handle"], keep="first")
 
-        # Keep only the first row per Handle (main image, base price)
-        df = df.drop_duplicates(subset=["Handle"], keep="first")
+        df = pd.concat([df_main, df_fallback], ignore_index=True)
+    
+    # ── RULE: Group by Handle — one row per product ────────────────────
+    df = df.drop_duplicates(subset=["Handle"], keep="first")
 
-    # Drop rows with missing or zero price
-    if "price" in df.columns:
-        df = df[df["price"].notna() & (df["price"] > 0)]
+    # ── Keep only the columns we need ─────────────────────────────────
+    # RULE: Ignore advanced Google Shopping columns
+    keep = ["Handle", "Title", "description", "image", "price"]
+    df = df[[c for c in keep if c in df.columns]].copy()
 
-    # Drop rows with empty image path
+    # ── Drop rows with missing or zero price ───────────────────────────
+    df["price"] = pd.to_numeric(df["price"], errors="coerce")
+    df = df[df["price"].notna() & (df["price"] > 0)]
+
+    # ── Drop rows with empty local image path ──────────────────────────
     if "image" in df.columns:
-        df["image"] = df["image"].fillna("")
+        df["image"] = df["image"].fillna("").astype(str)
         df = df[df["image"].str.strip() != ""]
 
-    # Fill remaining NaNs
+    # ── Fill remaining NaNs ────────────────────────────────────────────
     df["description"] = df["description"].fillna("")
     df["Title"] = df["Title"].fillna("")
 
     print("Final shape:", df.shape)
-    print("Final columns:", df.columns.tolist())
-    print("\nSample rows:")
-    print(df.head(5))
-
+    print("Sample rows:")
+    print(df[["Handle", "Title", "image", "price"]].head(5))
     return df.reset_index(drop=True)
 
 
