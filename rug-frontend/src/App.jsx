@@ -435,9 +435,14 @@ export default function App() {
     const formData = new FormData();
     if (image) formData.append("image", image);
     formData.append("text_query", textQuery || "");
-    formData.append("max_price", maxPrice || "");
     formData.append("top_k", 8);
     formData.append("model_type", modelType);
+
+    // ── FIX: only send max_price if it's a valid positive number ──
+    const parsedMax = parseFloat(maxPrice);
+    if (maxPrice !== "" && !isNaN(parsedMax)) {
+      formData.append("max_price", parsedMax);
+    }
 
     setLoading(true);
     setResults([]);
@@ -483,7 +488,7 @@ export default function App() {
         </header>
 
         <main className="main">
-          {/* Mode Toggle — now 3 buttons */}
+          {/* Mode Toggle */}
           <div className="mode-toggle">
             <button
               className={`mode-btn ${modelType === "clip" ? "active" : ""}`}
@@ -575,6 +580,7 @@ export default function App() {
                   className="text-input price-input"
                   placeholder="No limit"
                   value={maxPrice}
+                  min="0"
                   onChange={(e) => setMaxPrice(e.target.value)}
                 />
               </div>
@@ -652,7 +658,6 @@ export default function App() {
                     <div className="card-img-wrap">
                       {r.image ? (
                         <img
-                          // ✅ FIXED: removed trailing slash — r.image already starts with /images/
                           src={`http://127.0.0.1:8000${r.image}`}
                           alt={r.title}
                           className="card-img"
