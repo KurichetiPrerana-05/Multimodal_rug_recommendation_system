@@ -1,0 +1,43 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+
+# Virtual environment
+.venv/
+env/
+
+# Model cache (very large, don't push)
+~/.cache/
+*.bin
+*.pt
+*.safetensors
+
+# Temp files
+data/_temp_query.jpg
+
+# Node / React
+node_modules/
+frontend/node_modules/
+frontend/build/
+frontend/dist/
+.next/
+
+# Environment variables
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+*.code-workspace
+
+# OS
+.DS_Store
+Thumbs.db
